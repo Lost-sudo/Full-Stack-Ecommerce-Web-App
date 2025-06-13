@@ -1,9 +1,10 @@
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import UserProfile, SellerProfile
-from .serializers import RegisterSerializer, CustomTokenObtainPairSerializer, UserProfileSerializer, SellerProfileSerializer
+from .models import UserProfile, SellerProfile, ShippingAddress
+from .serializers import RegisterSerializer, CustomTokenObtainPairSerializer, UserProfileSerializer, SellerProfileSerializer, ShippingAddressSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -38,6 +39,7 @@ class RegisterView(APIView):
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+
 # Create / Update / Get regular user profile
 class UserProfileView(APIView):
     serializer_class = UserProfileSerializer
@@ -50,10 +52,10 @@ class UserProfileView(APIView):
 
         serializer = self.serializer_class(data=request.data, context={'request': request})
         if serializer.is_valid():
-            profile = serializer.save()
+            serializer.save()
             return Response({
                 'message': 'Profile created successfully.',
-                'profile': UserProfileSerializer(profile).data
+                'profile': serializer.data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -120,3 +122,43 @@ class ProfileStatusView(APIView):
             'has_profile': request.user.has_profile(),
             'has_seller_profile': request.user.has_seller_profile()
         }, status=status.HTTP_200_OK)
+
+
+class ShippingAddressView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        address = ShippingAddress.objects.filter(user=request.user)
+        serializer = ShippingAddressSerializer(address, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = ShippingAddressSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ShippingAddressDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk):
+        return get_object_or_404(ShippingAddress, pk=pk, user=request.user)
+
+    def get(self, request, pk):
+        address = self.get_object(request, pk)
+        serializer = ShippingAddressSerializer(address)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        address = self.get_object(request, pk)
+        serializer = ShippingAddressSerializer(address, data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        address = self.get_object(request, pk)
+        address.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

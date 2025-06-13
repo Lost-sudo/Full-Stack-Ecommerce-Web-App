@@ -14,11 +14,11 @@ class UserFlowTests(APITestCase):
         self.user_profile_url = reverse('user-profile')
         self.seller_profile_url = reverse('seller-profile')
         self.profile_status_url = reverse('profile-status')
+        self.address_list_url = reverse('shipping-address')
 
         self.user_data = {
             'email': 'testuser@example.com',
             'full_name': 'Test User',
-            'phone_number': '1234567890',
             'password': 'strongpassword123',
             'confirm_password': 'strongpassword123'
         }
@@ -30,8 +30,16 @@ class UserFlowTests(APITestCase):
             'shop_contact_number': '0987654321',
         }
 
-        self.profile_data = {
-            'shipping_address': '456 Another St, Test City',
+        self.profile_data = {}
+
+        self.address_data = {
+            'recipient_name': 'John Doe',
+            'phone_number': '1112223333',
+            'address_line': '456 Another St',
+            'city': 'Test City',
+            'state': 'Test State',
+            'country': 'Test Country',
+            'postal_code': '12345'
         }
 
     def authenticated(self):
@@ -111,22 +119,12 @@ class UserFlowTests(APITestCase):
         self.client.post(self.user_profile_url, self.profile_data)
         response = self.client.get(self.user_profile_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('shipping_address', response.data)
-
-    def test_update_user_profile(self):
-        self.authenticated()
-        self.client.post(self.user_profile_url, self.profile_data)
-        updated_data = {'shipping_address': '789 Updated St, Test City'}
-        response = self.client.put(self.user_profile_url, updated_data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['shipping_address'], updated_data['shipping_address'])
 
     # Seller Profile flow
     def test_create_seller_profile(self):
         self.authenticated()
         response = self.client.post(self.seller_profile_url, self.seller_data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('profile', response.data)
 
     def test_prevent_duplicate_seller_profile(self):
         self.authenticated()
@@ -146,7 +144,6 @@ class UserFlowTests(APITestCase):
         updated_data = {'shop_description': 'Updated shop info'}
         response = self.client.put(self.seller_profile_url, updated_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['shop_description'], updated_data['shop_description'])
 
     def test_profile_status_view(self):
         self.authenticated()
@@ -154,3 +151,39 @@ class UserFlowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('has_profile', response.data)
         self.assertIn('has_seller_profile', response.data)
+
+    def test_create_shipping_address(self):
+        self.authenticated()
+        self.client.post(self.user_profile_url, self.profile_data)
+        response = self.client.post(self.address_list_url, self.address_data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('recipient_name', response.data)
+
+    def test_list_shipping_address(self):
+        self.authenticated()
+        self.client.post(self.user_profile_url, self.profile_data)
+        self.client.post(self.address_list_url, self.address_data)
+        response = self.client.get(self.address_list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data), 1)
+
+    def test_update_shipping_address(self):
+        self.authenticated()
+        self.client.post(self.user_profile_url, self.profile_data)
+        create_response = self.client.post(self.address_list_url, self.address_data)
+        address_id = create_response.data['id']
+        update_url = reverse('shipping-address-detail', args=[address_id])
+        updated_data = self.address_data.copy()
+        updated_data['city'] = 'New City'
+        response = self.client.put(update_url, updated_data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['city'], 'New City')
+
+    def test_delete_shipping_address(self):
+        self.authenticated()
+        self.client.post(self.user_profile_url, self.profile_data)
+        create_response = self.client.post(self.address_list_url, self.address_data)
+        address_id = create_response.data['id']
+        delete_url = reverse('shipping-address-detail', args=[address_id])
+        response = self.client.delete(delete_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.core.validators import validate_email
 from rest_framework.validators import UniqueValidator
-from .models import UserProfile, SellerProfile
+from .models import UserProfile, SellerProfile, ShippingAddress
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
@@ -18,7 +18,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('email', 'full_name', 'phone_number', 'password', 'confirm_password')
+        fields = ('email', 'full_name', 'password', 'confirm_password')
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
@@ -30,7 +30,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(
             email=validated_data['email'],
             full_name=validated_data['full_name'],
-            phone_number=validated_data['phone_number'],
             password=validated_data['password']
         )
         return user
@@ -47,6 +46,25 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return super().validate(attrs)
 
 
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShippingAddress
+        fields = '__all__'
+        read_only_fields = ['user']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        if validated_data.get('is_default'):
+            ShippingAddress.objects.filter(user=user).update(is_default=False)
+        return ShippingAddress.objects.create(user=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        if validated_data.get('is_default'):
+            ShippingAddress.objects.filter(user=instance.user).exlude(pk=instance.pk).update(is_default=False)
+        return super().update(instance, validated_data)
+
+
+
 # Serializer for returning basic user info with profile flags
 class UserSerializer(serializers.ModelSerializer):
     has_profile = serializers.SerializerMethodField()
@@ -54,7 +72,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'full_name', 'phone_number', 'is_seller', 'has_profile', 'has_seller_profile')
+        fields = ('id', 'email', 'full_name', 'is_seller', 'has_profile', 'has_seller_profile')
 
     def get_has_profile(self, obj):
         return obj.has_profile()
@@ -67,19 +85,17 @@ class UserSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ('profile_picture', 'shipping_address')
+        fields = ['profile_picture']
 
     def create(self, validated_data):
         profile = UserProfile.objects.create(
             user = self.context['request'].user,
             profile_picture=validated_data.get('profile_picture'),
-            shipping_address = validated_data.get('shipping_address'),
         )
         return profile
 
     def update(self, instance, validated_data):
         instance.profile_picture = validated_data.get('profile_picture', instance.profile_picture)
-        instance.shipping_address = validated_data.get('shipping_address', instance.shipping_address)
         instance.save()
         return instance
     

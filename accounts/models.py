@@ -31,7 +31,6 @@ class User(AbstractUser, PermissionsMixin):
     username = None # Disable the default username field
     email = models.EmailField(unique=True, verbose_name="Email Address")
     full_name = models.CharField(max_length=255)
-    phone_number = models.CharField(max_length=15)
     is_active = models.BooleanField(default=True)
     is_seller = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -39,7 +38,7 @@ class User(AbstractUser, PermissionsMixin):
     objects = UserManager()
 
     USERNAME_FIELD = 'email' # Use email for login
-    REQUIRED_FIELDS = ['full_name', 'phone_number']
+    REQUIRED_FIELDS = ['full_name']
 
     class Meta:
         verbose_name = "User"
@@ -61,7 +60,6 @@ class User(AbstractUser, PermissionsMixin):
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_profile")
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
-    shipping_address = models.CharField(max_length=255, blank=True)
     
     class Meta:
         verbose_name = "User Profile"
@@ -69,6 +67,25 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} Profile"
+
+class ShippingAddress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="addresses")
+    recipient_name = models.CharField(max_length=255)
+    phone_number = models.CharField(max_length=15)
+    address_line = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    postal_code = models.CharField(max_length=20)
+    country = models.CharField(max_length=100)
+
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Address"
+        verbose_name_plural = "Addresses"
+        ordering = ['is_default', 'id']
+
+    def __str__(self):
+        return f"{self.address_line}, {self.city}, {self.country}"
 
 # One-to-one relationship for seller users    
 class SellerProfile(models.Model):
